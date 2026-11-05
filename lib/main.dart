@@ -32,7 +32,7 @@ class AgendaSanitariaApp extends StatelessWidget {
 
 class Aviso {
   String id;
-  String fecha; // Formato yyyy-MM-dd
+  String fecha;
   String horaRecogida;
   String nombre;
   String seguro;
@@ -42,6 +42,7 @@ class Aviso {
   String horaTto;
   String tipo;
   String tes;
+  String notas; // Notas adicionales
 
   Aviso({
     required this.id,
@@ -55,6 +56,7 @@ class Aviso {
     required this.horaTto,
     required this.tipo,
     required this.tes,
+    this.notas = '',
   });
 
   Map<String, dynamic> toMap() => {
@@ -69,6 +71,7 @@ class Aviso {
     'horaTto': horaTto,
     'tipo': tipo,
     'tes': tes,
+    'notas': notas,
   };
 
   factory Aviso.fromMap(Map<String, dynamic> map) => Aviso(
@@ -83,6 +86,7 @@ class Aviso {
     horaTto: map['horaTto'] ?? '',
     tipo: map['tipo'] ?? '',
     tes: map['tes'] ?? '',
+    notas: map['notas'] ?? '',
   );
 }
 
@@ -124,7 +128,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error cargando avisos: $e');
+      debugPrint('Error: $e');
     }
   }
 
@@ -170,6 +174,13 @@ class _AgendaScreenState extends State<AgendaScreen> {
         },
       ),
     );
+  }
+
+  void _guardarNotaRapida(Aviso aviso, String nuevaNota) {
+    setState(() {
+      aviso.notas = nuevaNota;
+    });
+    _guardarAvisos();
   }
 
   void _borrarAviso(String id) {
@@ -252,6 +263,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
                         aviso: item,
                         onEditar: () => _abrirFormulario(avisoExistente: item),
                         onBorrar: () => _borrarAviso(item.id),
+                        onActualizarNota: (nota) => _guardarNotaRapida(item, nota),
                       );
                     },
                   ),
@@ -273,22 +285,99 @@ class TarjetaAviso extends StatelessWidget {
   final Aviso aviso;
   final VoidCallback onEditar;
   final VoidCallback onBorrar;
+  final Function(String) onActualizarNota;
 
   const TarjetaAviso({
     super.key,
     required this.aviso,
     required this.onEditar,
     required this.onBorrar,
+    required this.onActualizarNota,
   });
 
-  void _hacerLlamada(String tel) async {
-    final uri = Uri.parse('tel:$tel');
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  // Abre el teclado telefónico (marcador) sin llamar directamente
+  void _abrirMarcador(BuildContext context, String tel) async {
+    final limpio = tel.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (limpio.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay número de teléfono válido.')),
+      );
+      return;
+    }
+    final uri = Uri.parse('tel:$limpio');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir el marcador.')),
+        );
+      }
+    }
   }
 
-  void _abrirMapa(String direccion) async {
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(direccion)}');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  // Abre Google Maps con la dirección exacta
+  void _abrirEnMaps(BuildContext context, String direccion) async {
+    if (direccion.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('La dirección está vacía.')),
+      );
+      return;
+    }
+    final query = Uri.encodeComponent(direccion.trim());
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir Google Maps.')),
+        );
+      }
+    }
+  }
+
+  // Diálogo para añadir/modificar notas de forma rápida
+  void _dialogoEditarNota(BuildContext context) {
+    final ctrl = TextEditingController(text: aviso.notas);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.edit_note, color: Color(0xFF0F172A)),
+            SizedBox(width: 8),
+            Text('Notas del Aviso', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+          ],
+        ),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 4,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Ej: 3º piso sin ascensor, requiere silla, llamar al timbre B...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F172A),
+              foregroundColor: const Color(0xFFFFD600),
+            ),
+            onPressed: () {
+              onActualizarNota(ctrl.text);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Guardar Nota'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -302,6 +391,7 @@ class TarjetaAviso extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Cabecera: Horas y Seguro
             Row(
               children: [
                 Container(
@@ -344,69 +434,145 @@ class TarjetaAviso extends StatelessWidget {
               ],
             ),
             const Divider(height: 16),
+
+            // Nombre
             Text(
               aviso.nombre.toUpperCase(),
               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1E293B)),
             ),
             const SizedBox(height: 8),
+
+            // ORIGEN (pulsable para abrir Maps)
             InkWell(
-              onTap: () => _abrirMapa(aviso.origen),
-              child: Row(
-                children: [
-                  const Icon(Icons.trip_origin, size: 16, color: Colors.green),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'ORIGEN: ${aviso.origen}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              onTap: () => _abrirEnMaps(context, aviso.origen),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.trip_origin, size: 18, color: Colors.green),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'ORIGEN: ${aviso.origen}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.directions, size: 16, color: Colors.blue),
-                ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.green.shade200),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.map, size: 13, color: Colors.green),
+                          SizedBox(width: 3),
+                          Text('Maps', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 6),
+
+            // DESTINO (pulsable para abrir Maps)
             InkWell(
-              onTap: () => _abrirMapa(aviso.destino),
-              child: Row(
-                children: [
-                  const Icon(Icons.location_on, size: 16, color: Colors.red),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'DESTINO: ${aviso.destino}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              onTap: () => _abrirEnMaps(context, aviso.destino),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 18, color: Colors.red),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'DESTINO: ${aviso.destino}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.directions, size: 16, color: Colors.blue),
-                ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.map, size: 13, color: Colors.red),
+                          SizedBox(width: 3),
+                          Text('Maps', style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
+
+            // NOTAS (si existen, se muestran en un cuadro destacado)
+            if (aviso.notas.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.info_outline, size: 16, color: Color(0xFF92400E)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        aviso.notas,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             const Divider(height: 16),
+
+            // Fila inferior: Botón Teléfono, Notas, TES y Editar/Borrar
             Row(
               children: [
                 if (aviso.telefono.isNotEmpty)
-                  ActionChip(
-                    avatar: const Icon(Icons.phone, size: 15, color: Colors.green),
-                    label: Text(aviso.telefono, style: const TextStyle(fontSize: 12)),
-                    onPressed: () => _hacerLlamada(aviso.telefono),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                      minimumSize: const Size(0, 32),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.phone, size: 14),
+                    label: Text(aviso.telefono, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: () => _abrirMarcador(context, aviso.telefono),
                   ),
                 const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(4),
+                IconButton(
+                  tooltip: 'Añadir o editar notas',
+                  icon: Icon(
+                    aviso.notas.isEmpty ? Icons.note_add_outlined : Icons.note_alt,
+                    size: 20,
+                    color: aviso.notas.isEmpty ? Colors.grey : const Color(0xFFB45309),
                   ),
-                  child: Text(
-                    aviso.tipo,
-                    style: TextStyle(color: Colors.orange.shade900, fontSize: 11, fontWeight: FontWeight.bold),
-                  ),
+                  onPressed: () => _dialogoEditarNota(context),
                 ),
                 const Spacer(),
                 Text('TES: ${aviso.tes}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
                 IconButton(
-                  icon: const Icon(Icons.edit, size: 18, color: Colors.grey),
+                  icon: const Icon(Icons.edit, size: 18, color: Colors.blueGrey),
                   onPressed: onEditar,
                 ),
                 IconButton(
@@ -450,6 +616,7 @@ class _FormularioAvisoState extends State<FormularioAviso> {
   late TextEditingController _horaTtoCtrl;
   late TextEditingController _tipoCtrl;
   late TextEditingController _tesCtrl;
+  late TextEditingController _notasCtrl;
 
   @override
   void initState() {
@@ -464,6 +631,7 @@ class _FormularioAvisoState extends State<FormularioAviso> {
     _horaTtoCtrl = TextEditingController(text: a?.horaTto ?? '');
     _tipoCtrl = TextEditingController(text: a?.tipo ?? 'IDA Y VUELTA');
     _tesCtrl = TextEditingController(text: a?.tes ?? '');
+    _notasCtrl = TextEditingController(text: a?.notas ?? '');
   }
 
   @override
@@ -558,6 +726,16 @@ class _FormularioAvisoState extends State<FormularioAviso> {
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _notasCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'Notas adicionales (Opcional)',
+                  hintText: 'Ej: Silla de ruedas, no timbre, avisar antes...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
               const SizedBox(height: 16),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
@@ -579,6 +757,7 @@ class _FormularioAvisoState extends State<FormularioAviso> {
                       horaTto: _horaTtoCtrl.text,
                       tipo: _tipoCtrl.text,
                       tes: _tesCtrl.text,
+                      notas: _notasCtrl.text,
                     );
                     widget.alGuardar(nuevo);
                     Navigator.pop(context);
