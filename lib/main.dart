@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -20,8 +19,8 @@ class AgendaSanitariaApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFFD600), // Amarillo sanitario
-          primary: const Color(0xFF1E293B),
+          seedColor: const Color(0xFFFFD600),
+          primary: const Color(0xFF0F172A),
           secondary: const Color(0xFFFFC107),
         ),
         scaffoldBackgroundColor: const Color(0xFFF1F5F9),
@@ -104,14 +103,28 @@ class _AgendaScreenState extends State<AgendaScreen> {
     _cargarAvisos();
   }
 
+  String _formatearFechaTexto(DateTime d) {
+    const dias = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+    return '${dias[d.weekday - 1]}, ${d.day} DE ${meses[d.month - 1]}';
+  }
+
+  String _fechaClave(DateTime d) {
+    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _cargarAvisos() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? avisosJson = prefs.getString('avisos_locales');
-    if (avisosJson != null) {
-      final List dec = jsonDecode(avisosJson);
-      setState(() {
-        _todosLosAvisos = dec.map((e) => Aviso.fromMap(e)).toList();
-      });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? avisosJson = prefs.getString('avisos_locales');
+      if (avisosJson != null) {
+        final List dec = jsonDecode(avisosJson);
+        setState(() {
+          _todosLosAvisos = dec.map((e) => Aviso.fromMap(e)).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando avisos: $e');
     }
   }
 
@@ -122,8 +135,8 @@ class _AgendaScreenState extends State<AgendaScreen> {
   }
 
   List<Aviso> get _avisosDelDia {
-    final fmt = DateFormat('yyyy-MM-dd').format(_diaSeleccionado);
-    return _todosLosAvisos.where((a) => a.fecha == fmt).toList()
+    final clave = _fechaClave(_diaSeleccionado);
+    return _todosLosAvisos.where((a) => a.fecha == clave).toList()
       ..sort((a, b) => a.horaRecogida.compareTo(b.horaRecogida));
   }
 
@@ -142,7 +155,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => FormularioAviso(
-        fechaPredeterminada: _diaSeleccionado,
+        fechaClavePredeterminada: _fechaClave(_diaSeleccionado),
         avisoExistente: avisoExistente,
         alGuardar: (nuevoAviso) {
           setState(() {
@@ -169,13 +182,12 @@ class _AgendaScreenState extends State<AgendaScreen> {
   @override
   Widget build(BuildContext context) {
     final avisos = _avisosDelDia;
-    final formateadorFecha = DateFormat('EEEE, d MMMM', 'es_ES');
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'PROGRAMACIÓN TES',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white),
+          'AGENDA TRASLADOS TES',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
         ),
         backgroundColor: const Color(0xFF0F172A),
         actions: [
@@ -195,41 +207,38 @@ class _AgendaScreenState extends State<AgendaScreen> {
       ),
       body: Column(
         children: [
-          // Selector de fecha rápido
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             color: const Color(0xFFFFD600),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, size: 18),
+                  icon: const Icon(Icons.arrow_back_ios, size: 20),
                   onPressed: () => _seleccionarFecha(_diaSeleccionado.subtract(const Duration(days: 1))),
                 ),
                 Text(
-                  DateFormat('dd/MM/yyyy').format(_diaSeleccionado),
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Color(0xFF0F172A)),
+                  _formatearFechaTexto(_diaSeleccionado),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A)),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios, size: 18),
+                  icon: const Icon(Icons.arrow_forward_ios, size: 20),
                   onPressed: () => _seleccionarFecha(_diaSeleccionado.add(const Duration(days: 1))),
                 ),
               ],
             ),
           ),
-
-          // Lista de avisos del día
           Expanded(
             child: avisos.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.assignment_outlined, size: 64, color: Colors.grey.shade400),
-                        const SizedBox(height: 12),
+                        Icon(Icons.assignment_outlined, size: 60, color: Colors.grey.shade400),
+                        const SizedBox(height: 10),
                         Text(
-                          'No hay avisos programados para este día',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+                          'No hay traslados para este día',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 15, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
@@ -253,7 +262,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
         backgroundColor: const Color(0xFF0F172A),
         foregroundColor: const Color(0xFFFFD600),
         icon: const Icon(Icons.add),
-        label: const Text('NUEVO TRASLADO', style: TextStyle(fontWeight: FontWeight.bold)),
+        label: const Text('NUEVO AVISO', style: TextStyle(fontWeight: FontWeight.bold)),
         onPressed: () => _abrirFormulario(),
       ),
     );
@@ -287,13 +296,12 @@ class TarjetaAviso extends StatelessWidget {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabecera de la tarjeta: Horas y Seguro
             Row(
               children: [
                 Container(
@@ -336,15 +344,11 @@ class TarjetaAviso extends StatelessWidget {
               ],
             ),
             const Divider(height: 16),
-
-            // Nombre del paciente
             Text(
               aviso.nombre.toUpperCase(),
               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1E293B)),
             ),
             const SizedBox(height: 8),
-
-            // Origen y Destino con botones de mapa
             InkWell(
               onTap: () => _abrirMapa(aviso.origen),
               child: Row(
@@ -378,10 +382,7 @@ class TarjetaAviso extends StatelessWidget {
                 ],
               ),
             ),
-
             const Divider(height: 16),
-
-            // Fila inferior: Teléfono, Tipo, TES y Acciones
             Row(
               children: [
                 if (aviso.telefono.isNotEmpty)
@@ -422,13 +423,13 @@ class TarjetaAviso extends StatelessWidget {
 }
 
 class FormularioAviso extends StatefulWidget {
-  final DateTime fechaPredeterminada;
+  final String fechaClavePredeterminada;
   final Aviso? avisoExistente;
   final Function(Aviso) alGuardar;
 
   const FormularioAviso({
     super.key,
-    required this.fechaPredeterminada,
+    required this.fechaClavePredeterminada,
     this.avisoExistente,
     required this.alGuardar,
   });
@@ -566,10 +567,9 @@ class _FormularioAvisoState extends State<FormularioAviso> {
                 ),
                 onPressed: () {
                   if (_formKey.currentState!.validate()) {
-                    final fechaStr = DateFormat('yyyy-MM-dd').format(widget.fechaPredeterminada);
                     final nuevo = Aviso(
                       id: widget.avisoExistente?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                      fecha: widget.avisoExistente?.fecha ?? fechaStr,
+                      fecha: widget.avisoExistente?.fecha ?? widget.fechaClavePredeterminada,
                       horaRecogida: _horaRecogidaCtrl.text,
                       nombre: _nombreCtrl.text,
                       seguro: _seguroCtrl.text,
