@@ -1,379 +1,287 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const AgendaSanitariaApp());
+  runApp(const AvisosTesApp());
 }
 
-class AgendaSanitariaApp extends StatelessWidget {
-  const AgendaSanitariaApp({super.key});
+class AvisosTesApp extends StatelessWidget {
+  const AvisosTesApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Agenda TES',
+      title: 'Avisos TES',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFFD600),
-          primary: const Color(0xFF0F172A),
-          secondary: const Color(0xFFFFC107),
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF38BDF8),
+          secondary: Color(0xFF22C55E),
+          surface: Color(0xFF1E293B),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF1E293B),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF334155)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF334155)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF38BDF8), width: 1.5),
+          ),
+          labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontWeight: FontWeight.bold),
+        ),
       ),
-      home: const AgendaScreen(),
+      home: const FormularioAvisoScreen(),
     );
   }
 }
 
-class Aviso {
-  String id;
-  String fecha;
-  String horaRecogida;
-  String nombre;
-  String seguro;
-  String origen;
-  String destino;
-  String telefono;
-  String horaTto;
-  String tipo;
-  String tes;
-  String notas; // Notas adicionales
-
-  Aviso({
-    required this.id,
-    required this.fecha,
-    required this.horaRecogida,
-    required this.nombre,
-    required this.seguro,
-    required this.origen,
-    required this.destino,
-    required this.telefono,
-    required this.horaTto,
-    required this.tipo,
-    required this.tes,
-    this.notas = '',
-  });
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'fecha': fecha,
-    'horaRecogida': horaRecogida,
-    'nombre': nombre,
-    'seguro': seguro,
-    'origen': origen,
-    'destino': destino,
-    'telefono': telefono,
-    'horaTto': horaTto,
-    'tipo': tipo,
-    'tes': tes,
-    'notas': notas,
-  };
-
-  factory Aviso.fromMap(Map<String, dynamic> map) => Aviso(
-    id: map['id'] ?? '',
-    fecha: map['fecha'] ?? '',
-    horaRecogida: map['horaRecogida'] ?? '',
-    nombre: map['nombre'] ?? '',
-    seguro: map['seguro'] ?? '',
-    origen: map['origen'] ?? '',
-    destino: map['destino'] ?? '',
-    telefono: map['telefono'] ?? '',
-    horaTto: map['horaTto'] ?? '',
-    tipo: map['tipo'] ?? '',
-    tes: map['tes'] ?? '',
-    notas: map['notas'] ?? '',
-  );
-}
-
-class AgendaScreen extends StatefulWidget {
-  const AgendaScreen({super.key});
+class FormularioAvisoScreen extends StatefulWidget {
+  const FormularioAvisoScreen({super.key});
 
   @override
-  State<AgendaScreen> createState() => _AgendaScreenState();
+  State<FormularioAvisoScreen> createState() => _FormularioAvisoScreenState();
 }
 
-class _AgendaScreenState extends State<AgendaScreen> {
-  DateTime _diaSeleccionado = DateTime.now();
-  List<Aviso> _todosLosAvisos = [];
+class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
+  // Controladores de texto
+  DateTime? _fechaSeleccionada = DateTime.now();
+  String? _provinciaSeleccionada;
+  final TextEditingController _aseguradoController = TextEditingController();
+  final TextEditingController _dniNumController = TextEditingController();
+  final TextEditingController _dniLetraController = TextEditingController();
+  final TextEditingController _polizaController = TextEditingController();
+  final TextEditingController _autorizacionController = TextEditingController();
+  String? _tipoSeleccionado;
+  final TextEditingController _origenController = TextEditingController();
+  final TextEditingController _destinoController = TextEditingController();
+  TimeOfDay? _horaLlamada;
+  TimeOfDay? _horaAsistencia;
+  TimeOfDay? _horaDestino;
+  final TextEditingController _telefonoController = TextEditingController();
+  final TextEditingController _anotacionesController = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _cargarAvisos();
-  }
+  final List<String> _provinciasCyL = [
+    'Zamora',
+    'Salamanca',
+    'Valladolid',
+    'León',
+    'Burgos',
+    'Palencia',
+    'Ávila',
+    'Segovia',
+    'Soria',
+  ];
 
-  String _formatearFechaTexto(DateTime d) {
-    const dias = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
-    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-    return '${dias[d.weekday - 1]}, ${d.day} DE ${meses[d.month - 1]}';
-  }
+  final List<String> _tiposTraslado = [
+    'Alta',
+    'Urgencia',
+    'Interhospitalario',
+  ];
 
-  String _fechaClave(DateTime d) {
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> _cargarAvisos() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final String? avisosJson = prefs.getString('avisos_locales');
-      if (avisosJson != null) {
-        final List dec = jsonDecode(avisosJson);
-        setState(() {
-          _todosLosAvisos = dec.map((e) => Aviso.fromMap(e)).toList();
-        });
-      }
-    } catch (e) {
-      debugPrint('Error: $e');
+  // Cálculo automático de la letra del DNI según los 8 números
+  void _calcularLetraDni(String valor) {
+    const letras = "TRWAGMYFPDXBNJZSQVHLCKE";
+    if (valor.length == 8 && int.tryParse(valor) != null) {
+      int num = int.parse(valor);
+      _dniLetraController.text = letras[num % 23];
     }
   }
 
-  Future<void> _guardarAvisos() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String enc = jsonEncode(_todosLosAvisos.map((e) => e.toMap()).toList());
-    await prefs.setString('avisos_locales', enc);
-  }
-
-  List<Aviso> get _avisosDelDia {
-    final clave = _fechaClave(_diaSeleccionado);
-    return _todosLosAvisos.where((a) => a.fecha == clave).toList()
-      ..sort((a, b) => a.horaRecogida.compareTo(b.horaRecogida));
-  }
-
-  void _seleccionarFecha(DateTime dia) {
-    setState(() {
-      _diaSeleccionado = dia;
-    });
-  }
-
-  void _abrirFormulario({Aviso? avisoExistente}) {
-    showModalBottomSheet(
+  // Selector de Fecha
+  Future<void> _seleccionarFecha() async {
+    final DateTime? picked = await showDatePicker(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => FormularioAviso(
-        fechaClavePredeterminada: _fechaClave(_diaSeleccionado),
-        avisoExistente: avisoExistente,
-        alGuardar: (nuevoAviso) {
-          setState(() {
-            if (avisoExistente != null) {
-              final idx = _todosLosAvisos.indexWhere((a) => a.id == avisoExistente.id);
-              if (idx != -1) _todosLosAvisos[idx] = nuevoAviso;
-            } else {
-              _todosLosAvisos.add(nuevoAviso);
-            }
-          });
-          _guardarAvisos();
-        },
-      ),
-    );
-  }
-
-  void _guardarNotaRapida(Aviso aviso, String nuevaNota) {
-    setState(() {
-      aviso.notas = nuevaNota;
-    });
-    _guardarAvisos();
-  }
-
-  void _borrarAviso(String id) {
-    setState(() {
-      _todosLosAvisos.removeWhere((a) => a.id == id);
-    });
-    _guardarAvisos();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final avisos = _avisosDelDia;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'AGENDA TRASLADOS TES',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Colors.white),
-        ),
-        backgroundColor: const Color(0xFF0F172A),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.calendar_month, color: Color(0xFFFFD600)),
-            onPressed: () async {
-              final seleccion = await showDatePicker(
-                context: context,
-                initialDate: _diaSeleccionado,
-                firstDate: DateTime(2023),
-                lastDate: DateTime(2030),
-              );
-              if (seleccion != null) _seleccionarFecha(seleccion);
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            color: const Color(0xFFFFD600),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, size: 20),
-                  onPressed: () => _seleccionarFecha(_diaSeleccionado.subtract(const Duration(days: 1))),
-                ),
-                Text(
-                  _formatearFechaTexto(_diaSeleccionado),
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A)),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.arrow_forward_ios, size: 20),
-                  onPressed: () => _seleccionarFecha(_diaSeleccionado.add(const Duration(days: 1))),
-                ),
-              ],
+      initialDate: _fechaSeleccionada ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF38BDF8),
+              onPrimary: Colors.black,
+              surface: Color(0xFF1E293B),
+              onSurface: Colors.white,
             ),
           ),
-          Expanded(
-            child: avisos.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.assignment_outlined, size: 60, color: Colors.grey.shade400),
-                        const SizedBox(height: 10),
-                        Text(
-                          'No hay traslados para este día',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 15, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: avisos.length,
-                    itemBuilder: (ctx, i) {
-                      final item = avisos[i];
-                      return TarjetaAviso(
-                        aviso: item,
-                        onEditar: () => _abrirFormulario(avisoExistente: item),
-                        onBorrar: () => _borrarAviso(item.id),
-                        onActualizarNota: (nota) => _guardarNotaRapida(item, nota),
-                      );
-                    },
-                  ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _fechaSeleccionada = picked;
+      });
+    }
+  }
+
+  // Selector de Hora Digital (Formato 24h)
+  Future<void> _seleccionarHora(Function(TimeOfDay) onSelected, TimeOfDay? actual) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: actual ?? TimeOfDay.now(),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.dark(
+                primary: Color(0xFF38BDF8),
+                onPrimary: Colors.black,
+                surface: Color(0xFF1E293B),
+                onSurface: Colors.white,
+              ),
+            ),
+            child: child!,
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF0F172A),
-        foregroundColor: const Color(0xFFFFD600),
-        icon: const Icon(Icons.add),
-        label: const Text('NUEVO AVISO', style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => _abrirFormulario(),
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        onSelected(picked);
+      });
+    }
+  }
+
+  String _formatearFecha(DateTime? dt) {
+    if (dt == null) return '';
+    String d = dt.day.toString().padLeft(2, '0');
+    String m = dt.month.toString().padLeft(2, '0');
+    return '$d/$m/${dt.year}';
+  }
+
+  String _formatearHora(TimeOfDay? t) {
+    if (t == null) return '';
+    String h = t.hour.toString().padLeft(2, '0');
+    String m = t.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  // Construir mensaje exacto para WhatsApp
+  String _construirMensajeWhatsApp() {
+    List<String> lineas = [];
+
+    if (_fechaSeleccionada != null) {
+      lineas.add('*FECHA*: ${_formatearFecha(_fechaSeleccionada)}');
+    }
+    if (_provinciaSeleccionada != null && _provinciaSeleccionada!.isNotEmpty) {
+      lineas.add('*PROVINCIA*: $_provinciaSeleccionada');
+    }
+    if (_aseguradoController.text.trim().isNotEmpty) {
+      lineas.add('*ASEGURADO*: ${_aseguradoController.text.trim()}');
+    }
+    String dniTotal = '${_dniNumController.text.trim()}${_dniLetraController.text.trim().toUpperCase()}';
+    if (dniTotal.isNotEmpty) {
+      lineas.add('*DNI*: $dniTotal');
+    }
+    if (_polizaController.text.trim().isNotEmpty) {
+      lineas.add('*Nº PÓLIZA*: ${_polizaController.text.trim()}');
+    }
+    if (_autorizacionController.text.trim().isNotEmpty) {
+      lineas.add('*Nº AUTORIZACION*: ${_autorizacionController.text.trim()}');
+    }
+    if (_tipoSeleccionado != null && _tipoSeleccionado!.isNotEmpty) {
+      lineas.add('*TIPO*: $_tipoSeleccionado');
+    }
+    if (_origenController.text.trim().isNotEmpty) {
+      lineas.add('*ORIGEN*: ${_origenController.text.trim()}');
+    }
+    if (_destinoController.text.trim().isNotEmpty) {
+      lineas.add('*DESTINO*: ${_destinoController.text.trim()}');
+    }
+    if (_horaLlamada != null) {
+      lineas.add('*HORA DE LLAMADA*: ${_formatearHora(_horaLlamada)}');
+    }
+    if (_horaAsistencia != null) {
+      lineas.add('*HORA ASISTENCIA*: ${_formatearHora(_horaAsistencia)}');
+    }
+    if (_horaDestino != null) {
+      lineas.add('*HORA DESTINO*: ${_formatearHora(_horaDestino)}');
+    }
+    if (_telefonoController.text.trim().isNotEmpty) {
+      lineas.add('*TELEFONO*: ${_telefonoController.text.trim()}');
+    }
+    if (_anotacionesController.text.trim().isNotEmpty) {
+      lineas.add(_anotacionesController.text.trim());
+    }
+
+    return lineas.join('\n');
+  }
+
+  void _copiarAlPortapapeles() {
+    String mensaje = _construirMensajeWhatsApp();
+    if (mensaje.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Rellena al menos un dato antes de copiar'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    Clipboard.setData(ClipboardData(text: mensaje));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.white),
+            SizedBox(width: 10),
+            Text('¡Aviso copiado para WhatsApp!'),
+          ],
+        ),
+        backgroundColor: Color(0xFF22C55E),
+        duration: Duration(seconds: 2),
       ),
     );
   }
-}
 
-class TarjetaAviso extends StatelessWidget {
-  final Aviso aviso;
-  final VoidCallback onEditar;
-  final VoidCallback onBorrar;
-  final Function(String) onActualizarNota;
-
-  const TarjetaAviso({
-    super.key,
-    required this.aviso,
-    required this.onEditar,
-    required this.onBorrar,
-    required this.onActualizarNota,
-  });
-
-  // Abre el teclado telefónico (marcador) sin llamar directamente
-  void _abrirMarcador(BuildContext context, String tel) async {
-    final limpio = tel.replaceAll(RegExp(r'[^0-9+]'), '');
-    if (limpio.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay número de teléfono válido.')),
-      );
-      return;
-    }
-    final uri = Uri.parse('tel:$limpio');
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir el marcador.')),
-        );
-      }
-    }
-  }
-
-  // Abre Google Maps con la dirección exacta
-  void _abrirEnMaps(BuildContext context, String direccion) async {
-    if (direccion.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('La dirección está vacía.')),
-      );
-      return;
-    }
-    final query = Uri.encodeComponent(direccion.trim());
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No se pudo abrir Google Maps.')),
-        );
-      }
-    }
-  }
-
-  // Diálogo para añadir/modificar notas de forma rápida
-  void _dialogoEditarNota(BuildContext context) {
-    final ctrl = TextEditingController(text: aviso.notas);
+  void _limpiarFormulario() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.edit_note, color: Color(0xFF0F172A)),
-            SizedBox(width: 8),
-            Text('Notas del Aviso', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-          ],
-        ),
-        content: TextField(
-          controller: ctrl,
-          maxLines: 4,
-          autofocus: true,
-          decoration: const InputDecoration(
-            hintText: 'Ej: 3º piso sin ascensor, requiere silla, llamar al timbre B...',
-            border: OutlineInputBorder(),
-          ),
-        ),
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('¿Vaciar aviso?'),
+        content: const Text('Se borrarán todos los campos para tomar uno nuevo.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
+            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0F172A),
-              foregroundColor: const Color(0xFFFFD600),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () {
-              onActualizarNota(ctrl.text);
               Navigator.pop(ctx);
+              setState(() {
+                _fechaSeleccionada = DateTime.now();
+                _provinciaSeleccionada = null;
+                _aseguradoController.clear();
+                _dniNumController.clear();
+                _dniLetraController.clear();
+                _polizaController.clear();
+                _autorizacionController.clear();
+                _tipoSeleccionado = null;
+                _origenController.clear();
+                _destinoController.clear();
+                _horaLlamada = null;
+                _horaAsistencia = null;
+                _horaDestino = null;
+                _telefonoController.clear();
+                _anotacionesController.clear();
+              });
             },
-            child: const Text('Guardar Nota'),
+            child: const Text('Vaciar', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -382,391 +290,259 @@ class TarjetaAviso extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Toma de Avisos TES', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: const Color(0xFF0F172A),
+        elevation: 0,
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabecera: Horas y Seguro
+            // FECHA Y PROVINCIA
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFD600),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'RECOGIDA: ${aviso.horaRecogida}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                Expanded(
+                  child: InkWell(
+                    onTap: _seleccionarFecha,
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'FECHA'),
+                      child: Text(
+                        _formatearFecha(_fechaSeleccionada),
+                        style: const TextStyle(fontSize: 15, color: Colors.white),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (aviso.horaTto.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'TTO: ${aviso.horaTto}',
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                    ),
-                  ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Text(
-                    aviso.seguro.toUpperCase(),
-                    style: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.bold, fontSize: 11),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _provinciaSeleccionada,
+                    decoration: const InputDecoration(labelText: 'PROVINCIA'),
+                    hint: const Text('Seleccionar', style: TextStyle(fontSize: 14)),
+                    items: _provinciasCyL.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
+                    onChanged: (val) => setState(() => _provinciaSeleccionada = val),
                   ),
                 ),
               ],
             ),
-            const Divider(height: 16),
+            const SizedBox(height: 12),
 
-            // Nombre
-            Text(
-              aviso.nombre.toUpperCase(),
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF1E293B)),
-            ),
-            const SizedBox(height: 8),
-
-            // ORIGEN (pulsable para abrir Maps)
-            InkWell(
-              onTap: () => _abrirEnMaps(context, aviso.origen),
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.trip_origin, size: 18, color: Colors.green),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'ORIGEN: ${aviso.origen}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.green.shade200),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.map, size: 13, color: Colors.green),
-                          SizedBox(width: 3),
-                          Text('Maps', style: TextStyle(fontSize: 10, color: Colors.green, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+            // ASEGURADO
+            TextField(
+              controller: _aseguradoController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'ASEGURADO',
+                hintText: 'Nombre y apellidos',
               ),
             ),
+            const SizedBox(height: 12),
 
-            // DESTINO (pulsable para abrir Maps)
-            InkWell(
-              onTap: () => _abrirEnMaps(context, aviso.destino),
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.location_on, size: 18, color: Colors.red),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'DESTINO: ${aviso.destino}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.red.shade200),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.map, size: 13, color: Colors.red),
-                          SizedBox(width: 3),
-                          Text('Maps', style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // NOTAS (si existen, se muestran en un cuadro destacado)
-            if (aviso.notas.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline, size: 16, color: Color(0xFF92400E)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        aviso.notas,
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            const Divider(height: 16),
-
-            // Fila inferior: Botón Teléfono, Notas, TES y Editar/Borrar
+            // DNI (Teclado numérico con cálculo de letra)
             Row(
               children: [
-                if (aviso.telefono.isNotEmpty)
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade600,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                      minimumSize: const Size(0, 32),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                Expanded(
+                  flex: 3,
+                  child: TextField(
+                    controller: _dniNumController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                    onChanged: _calcularLetraDni,
+                    decoration: const InputDecoration(
+                      labelText: 'DNI (NÚMEROS)',
+                      hintText: '8 dígitos',
                     ),
-                    icon: const Icon(Icons.phone, size: 14),
-                    label: Text(aviso.telefono, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    onPressed: () => _abrirMarcador(context, aviso.telefono),
                   ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  flex: 1,
+                  child: TextField(
+                    controller: _dniLetraController,
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [LengthLimitingTextInputFormatter(1)],
+                    textAlign: TextAlign.center,
+                    decoration: const InputDecoration(
+                      labelText: 'LETRA',
+                      hintText: 'Letra',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // PÓLIZA Y AUTORIZACIÓN (Teclado numérico)
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _polizaController,
+                    keyboardType: TextInputType.phone, // Permite números y guiones como 100849601112-01
+                    decoration: const InputDecoration(
+                      labelText: 'Nº PÓLIZA',
+                      hintText: 'Ej: 100849601112-01',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _autorizacionController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Nº AUTORIZACIÓN',
+                      hintText: 'Ej: 183138',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // TIPO
+            DropdownButtonFormField<String>(
+              value: _tipoSeleccionado,
+              decoration: const InputDecoration(labelText: 'TIPO'),
+              hint: const Text('Seleccionar tipo de traslado', style: TextStyle(fontSize: 14)),
+              items: _tiposTraslado.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+              onChanged: (val) => setState(() => _tipoSeleccionado = val),
+            ),
+            const SizedBox(height: 12),
+
+            // ORIGEN
+            TextField(
+              controller: _origenController,
+              decoration: const InputDecoration(
+                labelText: 'ORIGEN',
+                hintText: 'Hospital, habitación, domicilio...',
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // DESTINO
+            TextField(
+              controller: _destinoController,
+              decoration: const InputDecoration(
+                labelText: 'DESTINO',
+                hintText: 'Dirección y población de destino',
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // HORAS DIGITALES (Llamada, Asistencia, Destino)
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _seleccionarHora((t) => _horaLlamada = t, _horaLlamada),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'H. LLAMADA'),
+                      child: Text(
+                        _horaLlamada != null ? _formatearHora(_horaLlamada) : '--:--',
+                        style: const TextStyle(fontSize: 14, color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 6),
-                IconButton(
-                  tooltip: 'Añadir o editar notas',
-                  icon: Icon(
-                    aviso.notas.isEmpty ? Icons.note_add_outlined : Icons.note_alt,
-                    size: 20,
-                    color: aviso.notas.isEmpty ? Colors.grey : const Color(0xFFB45309),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _seleccionarHora((t) => _horaAsistencia = t, _horaAsistencia),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'H. ASIST.'),
+                      child: Text(
+                        _horaAsistencia != null ? _formatearHora(_horaAsistencia) : '--:--',
+                        style: const TextStyle(fontSize: 14, color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
-                  onPressed: () => _dialogoEditarNota(context),
                 ),
-                const Spacer(),
-                Text('TES: ${aviso.tes}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
-                IconButton(
-                  icon: const Icon(Icons.edit, size: 18, color: Colors.blueGrey),
-                  onPressed: onEditar,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
-                  onPressed: onBorrar,
+                const SizedBox(width: 6),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _seleccionarHora((t) => _horaDestino = t, _horaDestino),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'H. DEST.'),
+                      child: Text(
+                        _horaDestino != null ? _formatearHora(_horaDestino) : '--:--',
+                        style: const TextStyle(fontSize: 14, color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
                 ),
               ],
-            )
+            ),
+            const SizedBox(height: 12),
+
+            // TELÉFONO
+            TextField(
+              controller: _telefonoController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'TELÉFONO',
+                hintText: 'Ej: 649940048',
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // ANOTACIONES
+            TextField(
+              controller: _anotacionesController,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'ANOTACIONES',
+                hintText: 'Ej: Con camilla, oxígeno, etc.',
+              ),
+            ),
+            const SizedBox(height: 80), // Margen inferior para que no tape la barra flotante
           ],
         ),
       ),
-    );
-  }
-}
-
-class FormularioAviso extends StatefulWidget {
-  final String fechaClavePredeterminada;
-  final Aviso? avisoExistente;
-  final Function(Aviso) alGuardar;
-
-  const FormularioAviso({
-    super.key,
-    required this.fechaClavePredeterminada,
-    this.avisoExistente,
-    required this.alGuardar,
-  });
-
-  @override
-  State<FormularioAviso> createState() => _FormularioAvisoState();
-}
-
-class _FormularioAvisoState extends State<FormularioAviso> {
-  final _formKey = GlobalKey<FormState>();
-
-  late TextEditingController _horaRecogidaCtrl;
-  late TextEditingController _nombreCtrl;
-  late TextEditingController _seguroCtrl;
-  late TextEditingController _origenCtrl;
-  late TextEditingController _destinoCtrl;
-  late TextEditingController _telCtrl;
-  late TextEditingController _horaTtoCtrl;
-  late TextEditingController _tipoCtrl;
-  late TextEditingController _tesCtrl;
-  late TextEditingController _notasCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    final a = widget.avisoExistente;
-    _horaRecogidaCtrl = TextEditingController(text: a?.horaRecogida ?? '08:30');
-    _nombreCtrl = TextEditingController(text: a?.nombre ?? '');
-    _seguroCtrl = TextEditingController(text: a?.seguro ?? 'ASISA');
-    _origenCtrl = TextEditingController(text: a?.origen ?? '');
-    _destinoCtrl = TextEditingController(text: a?.destino ?? '');
-    _telCtrl = TextEditingController(text: a?.telefono ?? '');
-    _horaTtoCtrl = TextEditingController(text: a?.horaTto ?? '');
-    _tipoCtrl = TextEditingController(text: a?.tipo ?? 'IDA Y VUELTA');
-    _tesCtrl = TextEditingController(text: a?.tes ?? '');
-    _notasCtrl = TextEditingController(text: a?.notas ?? '');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                widget.avisoExistente == null ? 'Nuevo Traslado Sanitario' : 'Editar Traslado',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _horaRecogidaCtrl,
-                      decoration: const InputDecoration(labelText: 'Hora Recogida *', border: OutlineInputBorder()),
-                      validator: (v) => v!.isEmpty ? 'Requerido' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _horaTtoCtrl,
-                      decoration: const InputDecoration(labelText: 'Hora Tto.', border: OutlineInputBorder()),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _nombreCtrl,
-                decoration: const InputDecoration(labelText: 'Nombre del Paciente *', border: OutlineInputBorder()),
-                validator: (v) => v!.isEmpty ? 'Requerido' : null,
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _seguroCtrl,
-                      decoration: const InputDecoration(labelText: 'Seguro (Ej: ASISA)', border: OutlineInputBorder()),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _telCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'Teléfono', border: OutlineInputBorder()),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _origenCtrl,
-                decoration: const InputDecoration(labelText: 'Origen (Calle, Localidad)', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _destinoCtrl,
-                decoration: const InputDecoration(labelText: 'Destino (Hospital / Consulta)', border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _tipoCtrl,
-                      decoration: const InputDecoration(labelText: 'Tipo (IDA Y VUELTA)', border: OutlineInputBorder()),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _tesCtrl,
-                      decoration: const InputDecoration(labelText: 'TES asignado', border: OutlineInputBorder()),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextFormField(
-                controller: _notasCtrl,
-                maxLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Notas adicionales (Opcional)',
-                  hintText: 'Ej: Silla de ruedas, no timbre, avisar antes...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0F172A),
-                  foregroundColor: const Color(0xFFFFD600),
+      bottomSheet: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: const BoxDecoration(
+          color: Color(0xFF0F172A),
+          border: Border(top: BorderSide(color: Color(0xFF334155))),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.redAccent),
                   padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                onPressed: () {
-                  if (_formKey.currentState!.validate()) {
-                    final nuevo = Aviso(
-                      id: widget.avisoExistente?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                      fecha: widget.avisoExistente?.fecha ?? widget.fechaClavePredeterminada,
-                      horaRecogida: _horaRecogidaCtrl.text,
-                      nombre: _nombreCtrl.text,
-                      seguro: _seguroCtrl.text,
-                      origen: _origenCtrl.text,
-                      destino: _destinoCtrl.text,
-                      telefono: _telCtrl.text,
-                      horaTto: _horaTtoCtrl.text,
-                      tipo: _tipoCtrl.text,
-                      tes: _tesCtrl.text,
-                      notas: _notasCtrl.text,
-                    );
-                    widget.alGuardar(nuevo);
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Text('GUARDAR TRASLADO', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: _limpiarFormulario,
+                child: const Text('BORRAR', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF22C55E),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: _copiarAlPortapapeles,
+                icon: const Icon(Icons.copy, color: Color(0xFF052E16)),
+                label: const Text(
+                  'COPIAR AVISO',
+                  style: TextStyle(color: Color(0xFF052E16), fontWeight: FontWeight.bold, fontSize: 15),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
