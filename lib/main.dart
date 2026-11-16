@@ -125,7 +125,7 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
   }
 
   // Selector de Hora Digital (Formato 24h)
-  Future<void> _seleccionarHora(Function(TimeOfDay) onSelected, TimeOfDay? actual) async {
+  Future<void> _seleccionarHora(void Function(TimeOfDay) onSelected, TimeOfDay? actual) async {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: actual ?? TimeOfDay.now(),
@@ -171,7 +171,6 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
   String _construirMensajeWhatsApp() {
     List<String> lineas = [];
 
-    // Campos opcionales (solo si se rellenan)
     if (_fechaSeleccionada != null) {
       lineas.add('*FECHA*: ${_formatearFecha(_fechaSeleccionada)}');
     }
@@ -201,7 +200,7 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
       lineas.add('*DESTINO*: ${_destinoController.text.trim()}');
     }
 
-    // CAMPOS DE HORA: Siempre aparecen, estén rellenos o vacíos
+    // CAMPOS DE HORA: Siempre presentes (rellenos o con el espacio listo)
     String hLlamada = _horaLlamada != null ? _formatearHora(_horaLlamada) : '';
     lineas.add('*HORA DE LLAMADA*: $hLlamada');
 
@@ -211,7 +210,6 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
     String hDestino = _horaDestino != null ? _formatearHora(_horaDestino) : '';
     lineas.add('*HORA DESTINO*: $hDestino');
 
-    // Teléfono y anotaciones (opcionales)
     if (_telefonoController.text.trim().isNotEmpty) {
       lineas.add('*TELEFONO*: ${_telefonoController.text.trim()}');
     }
@@ -226,17 +224,19 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
     String mensaje = _construirMensajeWhatsApp();
 
     Clipboard.setData(ClipboardData(text: mensaje));
+    
+    // SnackBar corregido sin 'const' sobre Row
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Row(
-          children: [
+          children: const [
             Icon(Icons.check_circle, color: Colors.white),
             SizedBox(width: 10),
             Text('¡Aviso copiado para WhatsApp!'),
           ],
         ),
-        backgroundColor: Color(0xFF22C55E),
-        duration: Duration(seconds: 2),
+        backgroundColor: const Color(0xFF22C55E),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -375,7 +375,7 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
                 Expanded(
                   child: TextField(
                     controller: _polizaController,
-                    keyboardType: TextInputType.phone, // Permite números y guiones
+                    keyboardType: TextInputType.phone,
                     decoration: const InputDecoration(
                       labelText: 'Nº PÓLIZA',
                       hintText: 'Ej: 100849601112-01',
