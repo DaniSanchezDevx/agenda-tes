@@ -53,7 +53,6 @@ class FormularioAvisoScreen extends StatefulWidget {
 }
 
 class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
-  // Controladores de texto
   DateTime? _fechaSeleccionada = DateTime.now();
   String? _provinciaSeleccionada;
   final TextEditingController _aseguradoController = TextEditingController();
@@ -168,10 +167,11 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
     return '$h:$m';
   }
 
-  // Construir mensaje exacto para WhatsApp
+  // Construcción del mensaje para WhatsApp
   String _construirMensajeWhatsApp() {
     List<String> lineas = [];
 
+    // Campos opcionales (solo si se rellenan)
     if (_fechaSeleccionada != null) {
       lineas.add('*FECHA*: ${_formatearFecha(_fechaSeleccionada)}');
     }
@@ -200,15 +200,18 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
     if (_destinoController.text.trim().isNotEmpty) {
       lineas.add('*DESTINO*: ${_destinoController.text.trim()}');
     }
-    if (_horaLlamada != null) {
-      lineas.add('*HORA DE LLAMADA*: ${_formatearHora(_horaLlamada)}');
-    }
-    if (_horaAsistencia != null) {
-      lineas.add('*HORA ASISTENCIA*: ${_formatearHora(_horaAsistencia)}');
-    }
-    if (_horaDestino != null) {
-      lineas.add('*HORA DESTINO*: ${_formatearHora(_horaDestino)}');
-    }
+
+    // CAMPOS DE HORA: Siempre aparecen, estén rellenos o vacíos
+    String hLlamada = _horaLlamada != null ? _formatearHora(_horaLlamada) : '';
+    lineas.add('*HORA DE LLAMADA*: $hLlamada');
+
+    String hAsistencia = _horaAsistencia != null ? _formatearHora(_horaAsistencia) : '';
+    lineas.add('*HORA ASISTENCIA*: $hAsistencia');
+
+    String hDestino = _horaDestino != null ? _formatearHora(_horaDestino) : '';
+    lineas.add('*HORA DESTINO*: $hDestino');
+
+    // Teléfono y anotaciones (opcionales)
     if (_telefonoController.text.trim().isNotEmpty) {
       lineas.add('*TELEFONO*: ${_telefonoController.text.trim()}');
     }
@@ -221,15 +224,6 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
 
   void _copiarAlPortapapeles() {
     String mensaje = _construirMensajeWhatsApp();
-    if (mensaje.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Rellena al menos un dato antes de copiar'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
 
     Clipboard.setData(ClipboardData(text: mensaje));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -381,7 +375,7 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
                 Expanded(
                   child: TextField(
                     controller: _polizaController,
-                    keyboardType: TextInputType.phone, // Permite números y guiones como 100849601112-01
+                    keyboardType: TextInputType.phone, // Permite números y guiones
                     decoration: const InputDecoration(
                       labelText: 'Nº PÓLIZA',
                       hintText: 'Ej: 100849601112-01',
@@ -501,7 +495,7 @@ class _FormularioAvisoScreenState extends State<FormularioAvisoScreen> {
                 hintText: 'Ej: Con camilla, oxígeno, etc.',
               ),
             ),
-            const SizedBox(height: 80), // Margen inferior para que no tape la barra flotante
+            const SizedBox(height: 80),
           ],
         ),
       ),
